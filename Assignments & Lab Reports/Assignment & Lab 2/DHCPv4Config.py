@@ -6,6 +6,7 @@ try:
     import sys
     from netmiko import ConnectHandler
     from loguru import logger
+    from threading import Thread
 except ModuleNotFoundError as e:
     missing_module = str(e).split("'")[1]
     print(f"Error: The module '{missing_module}' is not installed.")
@@ -38,13 +39,20 @@ def argparse_helper():
         description="Configure interfaces to receive IP from DHCP on Cisco routers."
     )
     parser.add_argument(
-        "-i", "--ip", type=str, required=True, help="IP address or range (e.g., 10.0.10.1-3)"
+        "-i",
+        "--ip",
+        type=str,
+        required=True,
+        help="IP address or range (e.g., 10.0.10.1-3)",
     )
     parser.add_argument("--user", required=True, help="SSH username")
     parser.add_argument("--password", required=True, help="SSH password")
     parser.add_argument(
-        "--log", type=int, choices=[0, 1, 2], default=1,
-        help="Logging level: 0 (No log), 1 (Info), 2 (Debug)"
+        "--log",
+        type=int,
+        choices=[0, 1, 2],
+        default=1,
+        help="Logging level: 0 (No log), 1 (Info), 2 (Debug)",
     )
     return parser.parse_args()
 
@@ -112,7 +120,7 @@ def configure_device(ip, username, password):
         logger.success(f"SSH login successful to {ip}")
 
         config_commands = [
-            "interface fastEthernet 0/0",
+            "interface fastEthernet 1/0",
             "ip address dhcp",
             "no shutdown",
         ]
@@ -134,16 +142,26 @@ def configure_device(ip, username, password):
 
 def main():
     """
-    Main function to parse arguments, validate IPs, and configure Cisco routers.
+    Main function to parse arguments, validate IPs, and configure Cisco routers in parallel using threading.
     """
     args = argparse_helper()
     setup_logger(args.log)
     try:
         ip_list = parse_ip_range(args.ip)
+        threads = []
         for ip in ip_list:
             if not is_valid_ip(ip):
-                raise ValueError(f"Invalid IP: {ip}. Please enter a valid IP or correct the range.")
-            configure_device(ip, args.user, args.password)
+                raise ValueError(
+                    f"Invalid IP: {ip}. Please enter a valid IP or correct the range."
+                )
+            logger.info(f"Launching thread for {ip}")
+            thread = Thread(
+                target=configure_device, args=(ip, args.user, args.password)
+            )
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()
     except ValueError as e:
         print(f"Error: {e}")
 
