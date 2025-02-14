@@ -1,12 +1,21 @@
-import argparse
-from threading import Thread
-from prettytable import PrettyTable
-from loguru import logger
-from netmiko import ConnectHandler
-from network_lab.connectivity import Connectivity
-from network_lab.validate_ip import validate_ip
-from network_lab.bgp import BGP
-from network_lab.ssh_info import sshInfo
+#!/usr/bin/env python3
+
+try:
+    import argparse
+    from threading import Thread
+    from prettytable import PrettyTable
+    from loguru import logger
+    from netmiko import ConnectHandler
+    from network_lab.connectivity import Connectivity
+    from network_lab.validate_ip import validate_ip
+    from network_lab.bgp import BGP
+    from network_lab.ssh_info import sshInfo
+
+except ModuleNotFoundError as e:
+    missing_module = str(e).split("'")[1]
+    print(f"Error: The module '{missing_module}' is not installed.")
+    print(f"Please install it using 'pip install {missing_module}' and try again.")
+    exit(1)
 
 
 def setup_logger(log_level):
@@ -26,8 +35,12 @@ def setup_logger(log_level):
 def parse_arguments():
     """Parses command-line arguments."""
     parser = argparse.ArgumentParser(description="BGP Configuration Automation Script")
-    parser.add_argument("-f", "--file", required=True, help="Path to SSH info JSON file")
-    parser.add_argument("-c", "--bgp_file", required=True, help="Path to BGP config JSON file")
+    parser.add_argument(
+        "-f", "--file", required=True, help="Path to SSH info JSON file"
+    )
+    parser.add_argument(
+        "-c", "--bgp_file", required=True, help="Path to BGP config JSON file"
+    )
     parser.add_argument(
         "--log",
         type=int,
@@ -48,7 +61,7 @@ def dashboard():
         ("Show BGP route info", 3),
         ("Save running-config", 4),
         ("Update BGP conf dict", 5),
-        ("EXTRA CREDIT - Ping Check", 6)
+        ("EXTRA CREDIT - Ping Check", 6),
     ]
 
     # Create and configure the table
@@ -68,11 +81,15 @@ def dashboard():
 
     try:
         # Prompt for valid input
-        func_number = int(input("\nEnter the function number (1-6) to choose an action: "))
+        func_number = int(
+            input("\nEnter the function number (1-6) to choose an action: ")
+        )
         logger.debug(f"User input: {func_number}")
 
         if func_number not in dict(functions).values():
-            logger.error(f"Invalid function number: {func_number}. Please enter a number between 1 and 5.")
+            logger.error(
+                f"Invalid function number: {func_number}. Please enter a number between 1 and 5."
+            )
             return None
 
         logger.info(f"User selected function number {func_number}.")
@@ -82,6 +99,7 @@ def dashboard():
         logger.error("Invalid input. Please enter a valid number!")
         return None
 
+
 def sanity_checks(file):
     """Performs preliminary checks on SSH info and IP addresses."""
     ssh_info = sshInfo(file)
@@ -90,7 +108,7 @@ def sanity_checks(file):
         logger.error("SSH info file doesn't exist")
         return False
 
-    ip_list = [info['ip'] for info in ssh_info.values()]
+    ip_list = [info["ip"] for info in ssh_info.values()]
     connectivity_checker = Connectivity()
 
     # Check IP validity and connectivity in one loop
@@ -103,7 +121,6 @@ def sanity_checks(file):
             return False
 
     return ssh_info
-
 
 
 def conf(router_name, ssh_info, option, bgp_commands, bgp_instance):
@@ -158,7 +175,9 @@ def ping_test(router_1, router_2, loopback_ip_r1, loopback_ip_r2):
         logger.info(f"Pinging R2's loopback IP {loopback_ip_r2} from R1...")
         ping_result_r1 = connection_r1.send_command(f"ping {loopback_ip_r2}")
         if "Success" in ping_result_r1:
-            logger.success(f"Ping from R1 {router_1.get('ip')} to R2's loopback IP {loopback_ip_r2} succeeded.\n{ping_result_r1}")
+            logger.success(
+                f"Ping from R1 {router_1.get('ip')} to R2's loopback IP {loopback_ip_r2} succeeded.\n{ping_result_r1}"
+            )
         else:
             logger.error(f"Ping from R1 to R2's loopback IP {loopback_ip_r2} failed.")
         connection_r1.disconnect()
@@ -168,7 +187,9 @@ def ping_test(router_1, router_2, loopback_ip_r1, loopback_ip_r2):
         logger.info(f"Pinging R1's loopback IP {loopback_ip_r1} from R2...")
         ping_result_r2 = connection_r2.send_command(f"ping {loopback_ip_r1}")
         if "Success" in ping_result_r2:
-            logger.success(f"Ping from R2 {router_2.get('ip')} to R1's loopback IP {loopback_ip_r1} succeeded.\n{ping_result_r2}")
+            logger.success(
+                f"Ping from R2 {router_2.get('ip')} to R1's loopback IP {loopback_ip_r1} succeeded.\n{ping_result_r2}"
+            )
         else:
             logger.error(f"Ping from R2 to R1's loopback IP {loopback_ip_r1} failed.")
         connection_r2.disconnect()
@@ -192,14 +213,18 @@ def main():
         return
 
     if 1 <= option <= 5:
-        bgp_instance = BGP(file = "bgp.conf")  # Instantiate without arguments
+        bgp_instance = BGP(file="../../network_lab/bgp.conf")  # Instantiate without arguments
 
         bgp_conf_commands = bgp_instance.get_bgp_config()
         threads = []
 
-
-        for router, ssh_details, bgp_commands in zip(ssh_info.keys(), ssh_info.values(), bgp_conf_commands):
-            thread = Thread(target=conf, args=(router, ssh_details, option, bgp_commands, bgp_instance))
+        for router, ssh_details, bgp_commands in zip(
+            ssh_info.keys(), ssh_info.values(), bgp_conf_commands
+        ):
+            thread = Thread(
+                target=conf,
+                args=(router, ssh_details, option, bgp_commands, bgp_instance),
+            )
             thread.start()
 
             threads.append(thread)
@@ -222,4 +247,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
