@@ -1,11 +1,11 @@
-import os
 import git
 from pathlib import Path
 
 
 def push_changes(repo_path=None):
     """
-    Pushes changes to the remote Git repository only if there are uncommitted changes.
+    Compares modified files in the local repository against the GitHub repository.
+    Then, pushes if there are any local changes.
 
     :param repo_path: Path to the local Git repository.
     """
@@ -18,30 +18,40 @@ def push_changes(repo_path=None):
 
         repo = git.Repo(repo_path)
 
-        # Check for changes in tracked files
+        # Fetch the latest changes from the remote repository
+        repo.remote('origin').fetch()
+
+        # Compare local repository with the remote repository
+        local_commit = repo.head.commit
+        remote_commit = repo.commit('origin/main')  # Assumes you're working with the 'main' branch
+        # Check for changes in the working directory compared to the last commit
         changes_in_tracked_files = repo.index.diff("HEAD")
 
         # Check for untracked files
         untracked_files = repo.untracked_files
 
-        # Check if there are any changes
-        if changes_in_tracked_files or untracked_files:
-            print("There are changes. Committing and pushing...")
-            repo.git.add(update=True)
-            repo.index.commit("Pushing updates on GitHub via NMgithub.py")
+        # Check if there are any changes between the local and remote repositories
+        if local_commit != remote_commit:
+            # Check for changes in tracked files
+            changes_in_tracked_files = repo.index.diff("HEAD")
 
-            # Push to the remote repository
-            repo.remote('origin').push()
-            print("Changes pushed successfully.")
+            # Check for untracked files
+            untracked_files = repo.untracked_files
+
+            # If there are any changes, commit and push
+            if changes_in_tracked_files or untracked_files:
+                print("There are changes. Committing and pushing...")
+                repo.git.add(update=True)  # Stage modified files
+                repo.index.commit("pushing updates on GitHub via NMgithub.py")  # Commit changes
+                repo.remote('origin').push()  # Push changes to the remote repository
+                print("Changes pushed successfully.")
+            else:
+                print("No local changes detected. Skipping push.")
         else:
-            print("No changes to commit.")
+            print("Local repository is up to date with the remote.")
 
-    except git.exc.InvalidGitRepositoryError:
-        print(f"Error: The directory '{repo_path}' is not a valid Git repository.")
-    except git.exc.GitCommandError as git_error:
-        print(f"Git error: {git_error}")
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
 
