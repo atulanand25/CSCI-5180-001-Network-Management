@@ -12,8 +12,8 @@ def push_changes(repo_path=None):
     try:
         repo_path = repo_path or Path.cwd().parents[1]
 
-        # if not os.path.isdir(os.path.join(repo_path, ".git")):
-        #     raise ValueError(f"Not a valid Git repository: {repo_path}")
+        if not os.path.isdir(os.path.join(repo_path, ".git")):
+            raise ValueError(f"Not a valid Git repository: {repo_path}")
 
         repo = git.Repo(repo_path)
         repo.git.add(update=True)
