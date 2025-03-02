@@ -22,7 +22,7 @@ def push_changes(repo_path=None):
         if changes_in_tracked_files:
             print("There are changes in tracked files. Committing changes...")
             repo.git.add(update=True)  # Stage modified files
-            repo.index.commit("pushing updates on GitHub via NMgithub.py")  # Commit changes
+            repo.index.commit("pushing updates on GitHub via NMgithub.py")
             print("Local changes committed.")
         else:
             print("No changes detected in tracked files. Skipping commit.")
