@@ -71,6 +71,7 @@ def ping_sweep_with_nmap(ip):
 
     Returns:
         list: List of reachable IP addresses.
+        :param ip:
     """
     reachable = []
 
