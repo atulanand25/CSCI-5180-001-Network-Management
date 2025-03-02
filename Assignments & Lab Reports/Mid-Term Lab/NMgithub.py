@@ -18,8 +18,14 @@ def push_changes(repo_path=None):
 
         repo = git.Repo(repo_path)
 
+        # Check for changes in tracked files
+        changes_in_tracked_files = repo.index.diff("HEAD")
+
+        # Check for untracked files
+        untracked_files = repo.untracked_files
+
         # Check if there are any changes
-        if repo.is_dirty(untracked_files=True):
+        if changes_in_tracked_files or untracked_files:
             print("There are changes. Committing and pushing...")
             repo.git.add(update=True)
             repo.index.commit("Pushing updates on GitHub via NMgithub.py")
