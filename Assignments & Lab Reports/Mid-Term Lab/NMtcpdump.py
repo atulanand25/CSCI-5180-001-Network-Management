@@ -1,5 +1,4 @@
 import textwrap
-
 from scapy.all import rdpcap, in6_addrtomac
 import ipaddress
 

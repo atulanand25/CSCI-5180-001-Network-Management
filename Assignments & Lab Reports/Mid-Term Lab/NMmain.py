@@ -2,8 +2,14 @@ from NMtcpdump import extract_ipv6_and_mac_from_pcap
 from NMdhcpserver import configure_device
 from NMsnmp import collect_router_data
 import ipaddress
+from loguru import logger
 
 ipv6_mac_pairs = extract_ipv6_and_mac_from_pcap("/home/netman/Downloads/lab5.pcapng", "2001:db8::1")
+
+logger.debug("IPv6 and Corresponding MAC Addresses (excluding link-local addresses):")
+
+for ipv6, mac in ipv6_mac_pairs:
+    logger.success(f"IPv6: {ipv6} => MAC: {mac}")
 
 commands = "show ipv6 neighbors fastEthernet 0/0"
 
@@ -55,4 +61,10 @@ for line in fetch_ipv6_neighbour.splitlines()[1:]:
 
 routers = ['198.51.102.1', '198.51.101.7', '198.51.101.1', '198.51.100.1', '198.51.101.5']
 
-collect_router_data("atul", routers)
+devices_info = collect_router_data("atul", routers)
+
+# Iterating over the devices_info dictionary and printing key-value pairs
+formatted_info = "\n".join(f"{router}: {info}" for router, info in devices_info.items())
+
+# Log the information with each entry on a new line
+logger.success(f"Router Information:\n{formatted_info}")

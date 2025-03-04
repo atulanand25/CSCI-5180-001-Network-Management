@@ -1,8 +1,10 @@
-from json import dump
+import json
 from threading import Thread
 from easysnmp import Session
 import time
 import plotly.graph_objects as go
+import ipaddress
+from loguru import logger
 
 # Dictionary to store router information
 devices_info = {}
@@ -13,40 +15,80 @@ def perform_snmp_walk(oid: str, community: str, target: str):
     walk_data = session.walk(oid)
     return walk_data
 
+
 def fetch_snmp_interface_data(community: str, target: str):
     """Retrieves SNMP-based network interface information for a given target device."""
+    # Retrieve hostname for the router (system name)
     hostname = perform_snmp_walk('1.3.6.1.2.1.1.5', community, target)
+
     if not hostname:
-        print(f"SNMP Walk failed to retrieve hostname for target: {target}")
+        logger.error(f"SNMP Walk failed to retrieve hostname for target: {target}")
         return
+
     hostname = hostname[0].value
-    devices_info[hostname] = {'addresses': {}, 'status': {}}
+    devices_info[hostname] = {}
 
-    device_data = {}
-    for var_bind in perform_snmp_walk('1.3.6.1.2.1.4.20.1.2', community, target):
-        index, ip_address = str(var_bind.value), '.'.join(str(var_bind.oid).split('.')[-4:])
-        device_data[index] = [ip_address]
+    # Fetch data in parallel: IPv4, interfaces, subnet masks, IPv6, and link-local IPv6
+    ipv4_addresses = perform_snmp_walk('1.3.6.1.2.1.4.20.1.2', community, target)
+    interfaces = perform_snmp_walk('1.3.6.1.2.1.31.1.1.1.1', community, target)
+    subnet_masks = perform_snmp_walk('1.3.6.1.2.1.4.20.1.3', community, target)
+    ipv6_addresses = perform_snmp_walk('1.3.6.1.2.1.4.34.1.3.2.16', community, target)
+    link_local_ipv6 = perform_snmp_walk('1.3.6.1.2.1.4.34.1.3.4.20', community, target)
+    interface_status = perform_snmp_walk('1.3.6.1.2.1.2.2.1.8', community, target)
 
-    for var_bind in perform_snmp_walk('1.3.6.1.2.1.31.1.1.1.1', community, target):
-        index, interface_name = str(var_bind.oid).split('.')[-1], str(var_bind.value)
-        if index in device_data:
-            device_data[index].append(interface_name)
+    # If any data is missing, log the error
+    missing_data = []
+    if not ipv4_addresses: missing_data.append("IPv4 addresses")
+    if not interfaces: missing_data.append("interfaces")
+    if not subnet_masks: missing_data.append("subnet masks")
+    if not ipv6_addresses: missing_data.append("IPv6 addresses")
+    if not link_local_ipv6: missing_data.append("link-local IPv6 addresses")
+    if not interface_status: missing_data.append("interface status")
 
-    for var_bind in perform_snmp_walk('1.3.6.1.2.1.4.20.1.3', community, target):
+    if missing_data:
+        logger.error(f"SNMP Walk failed to retrieve: {', '.join(missing_data)} for target: {target}")
+        return
+
+    # Combine IPv4 and IPv6 processing in one loop
+    for var_bind in ipv4_addresses + ipv6_addresses + link_local_ipv6:
+        ip_address = oid_to_ipv6(var_bind.oid) if '34' in str(var_bind.oid) else '.'.join(str(var_bind.oid).split('.')[-4:])
+        index = var_bind.value
+
+        # Initialize the device entry if not present
+        if index not in devices_info[hostname]:
+            devices_info[hostname][index] = {'addresses': {}, 'status': {}, 'interface_name': None}
+
+        if '34' in str(var_bind.oid):  # For IPv6
+            # Ensure v6 dictionary exists directly
+            if 'v6' not in devices_info[hostname][index]['addresses']:
+                devices_info[hostname][index]['addresses']['v6'] = {}
+
+            if '34.1.3.4.20' in str(var_bind.oid):
+                devices_info[hostname][index]['addresses']['v6']['link-local'] = str(ipaddress.IPv6Address(ip_address).compressed)
+            else:
+                devices_info[hostname][index]['addresses']['v6']['global'] = str(ipaddress.IPv6Address(ip_address).compressed)
+        else:  # For IPv4
+            devices_info[hostname][index]['addresses']['v4'] = ip_address
+
+    # Process interfaces and statuses
+    for var_bind in interfaces + interface_status:
+        index = str(var_bind.oid).split('.')[-1]
+        if index in devices_info[hostname]:
+            if 'iso.3.6.1.2.1.31' in var_bind.oid:
+                devices_info[hostname][index]['interface_name'] = str(var_bind.value)
+            else:
+                status = 'Up' if str(var_bind.value) == '1' else 'Down'
+                devices_info[hostname][index]['status'] = status
+
+    # Process subnet masks
+    for var_bind in subnet_masks:
         ip_address, subnet_mask = '.'.join(str(var_bind.oid).split('.')[-4:]), str(var_bind.value)
-        for key, value in device_data.items():
-            if ip_address in value[0]:
-                device_data[key].append(subnet_mask)
+        for index, value in devices_info[hostname].items():
+            if ip_address in value['addresses'].get('v4', ''):
+                network = ipaddress.IPv4Network(f"0.0.0.0/{subnet_mask}", strict=False)
+                devices_info[hostname][index]['addresses']['v4'] = ip_address + "/" + str(network.prefixlen)
 
-    for var_bind in perform_snmp_walk('1.3.6.1.2.1.2.2.1.8', community, target):
-        index, status = str(var_bind.oid).strip('.')[-1], 'Up' if str(var_bind.value) == '1' else 'Down'
-        if index in device_data:
-            device_data[index].append(status)
-
-    for value in device_data.values():
-        devices_info[hostname]['addresses'][value[1]] = {'v4': {value[0]: value[2]}, 'v6': {}}
-        devices_info[hostname]['status'][value[1]] = value[3]
-    return device_data
+    return devices_info
 
 def retrieve_ipv6_addresses(hostname: str, target: str):
     """Retrieves IPv6 addresses from the device using SNMP."""
@@ -76,8 +118,11 @@ def collect_router_data(community: str, targets: list):
         hostname = list(devices_info.keys())[-1]
         # retrieve_ipv6_addresses(hostname, target)
 
-    # with open('router_info.json', 'w') as file:
-    #     dump(devices_info, file, indent=4)
+
+    with open('router_info.txt', 'w') as file:
+        json.dump(devices_info, file, indent=4)
+
+    return devices_info
 
 
 
@@ -99,6 +144,24 @@ def cpu_utilization(device_ip, community, interval=5, duration=120):
 
     # Return the time and CPU utilization data
     return times, cpu_values
+
+
+def oid_to_ipv6(oid: str) -> str:
+    """Converts an SNMP OID to an IPv6 address format."""
+    # Extract the relevant part of the OID and split it into chunks
+
+    if "34.1.3.4.20" in oid:
+        oid_parts = oid[28:-9].split(".")
+    else:
+        oid_parts = oid[28:].split(".")
+
+    # Convert the OID to the IPv6 format
+    ipv6_address = ":".join(
+        [f"{int(oid_parts[i]):02x}{int(oid_parts[i + 1]):02x}"
+         for i in range(0, len(oid_parts), 2)]
+    )
+
+    return ipv6_address
 
 
 def plot_and_save_cpu_utilization(times, cpu_values, filename="cpu_utilization.jpg"):
@@ -129,14 +192,14 @@ def main():
     routers = ['198.51.102.1', '198.51.101.7', '198.51.101.1', '198.51.100.1', '198.51.101.5']
     collect_router_data("atul", routers)
 
-    device_ip = '198.51.102.1'  # Replace with the device's IP address
-    community = 'atul'  # Replace with the SNMP community string
-
-    # Fetch CPU utilization data
-    times, cpu_values = cpu_utilization(device_ip, community)
-
-    # Plot and save the CPU utilization graph as a JPG file
-    plot_and_save_cpu_utilization(times, cpu_values)
+    # device_ip = '198.51.102.1'  # Replace with the device's IP address
+    # community = 'atul'  # Replace with the SNMP community string
+    #
+    # # Fetch CPU utilization data
+    # times, cpu_values = cpu_utilization(device_ip, community)
+    #
+    # # Plot and save the CPU utilization graph as a JPG file
+    # plot_and_save_cpu_utilization(times, cpu_values)
 
 
 if __name__ == "__main__":
