@@ -90,18 +90,6 @@ def fetch_snmp_interface_data(community: str, target: str):
 
     return devices_info
 
-def retrieve_ipv6_addresses(hostname: str, target: str):
-    """Retrieves IPv6 addresses from the device using SNMP."""
-    session = Session(hostname=target, community='atul', version=2)
-
-    # Example interfaces
-    for interface in ['FastEthernet0/0', 'FastEthernet1/0']:
-        output = session.get(f'1.3.6.1.2.1.4.20.1.2.{interface}')
-        if output:
-            ipv6_info = output.split('\n')[1].strip().split()
-            devices_info[hostname]['addresses'].setdefault(interface, {'v4': {}, 'v6': {}})['v6'] = {
-                ipv6_info[0].strip(','): ipv6_info[3]}
-
 def collect_router_data(community: str, targets: list):
     """Collects router interface information via SNMP and retrieves IPv6 addresses via SNMP for a list of target devices."""
     threads = [Thread(target=fetch_snmp_interface_data, args=(community, target)) for target in targets]
@@ -114,10 +102,6 @@ def collect_router_data(community: str, targets: list):
         if not devices_info:
             print(f"No devices found or SNMP data could not be retrieved for target: {target}. Skipping...")
             continue
-
-        hostname = list(devices_info.keys())[-1]
-        # retrieve_ipv6_addresses(hostname, target)
-
 
     with open('router_info.txt', 'w') as file:
         json.dump(devices_info, file, indent=4)
@@ -189,8 +173,9 @@ def main():
     """
     Main function to extract snmp data from devices.
     """
-    routers = ['198.51.102.1', '198.51.101.7', '198.51.101.1', '198.51.100.1', '198.51.101.5']
-    collect_router_data("atul", routers)
+    routers = ['198.51.102.1']
+    device = collect_router_data("atul", routers)
+    logger.info(device)
 
     # device_ip = '198.51.102.1'  # Replace with the device's IP address
     # community = 'atul'  # Replace with the SNMP community string

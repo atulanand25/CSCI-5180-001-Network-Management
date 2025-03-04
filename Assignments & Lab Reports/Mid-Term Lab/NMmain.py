@@ -1,6 +1,6 @@
 from NMtcpdump import extract_ipv6_and_mac_from_pcap
 from NMdhcpserver import configure_device
-from NMsnmp import collect_router_data
+from NMsnmp import collect_router_data, cpu_utilization, plot_and_save_cpu_utilization
 import ipaddress
 from loguru import logger
 
@@ -33,24 +33,24 @@ for line in fetch_ipv6_neighbour.splitlines()[1:]:
             R5_interface_IP = configure_device(ipv6, "atul", "atul", commands, config = True)
 
             commands = [
-                'ip dhcp pool R3',
+                'ip dhcp pool R2',
                 'host 198.51.101.3 255.255.255.0',
                 f'client-identifier {ipv6_mac_pairs[0][1]}'
             ]
 
-            R5_DHCP_STATIC_R3  = configure_device(ipv6, "atul", "atul", commands, config = True)
+            R5_DHCP_STATIC_R2  = configure_device(ipv6, "atul", "atul", commands, config = True)
 
             commands = [
-                'ip dhcp pool R2',
+                'ip dhcp pool R3',
                 'host 198.51.101.2 255.255.255.0',
                 f'client-identifier {ipv6_mac_pairs[1][1]}'
             ]
 
-            R5_DHCP_STATIC_R2 = configure_device(ipv6, "atul", "atul", commands, config = True)
+            R5_DHCP_STATIC_R3 = configure_device(ipv6, "atul", "atul", commands, config = True)
 
             commands = [
                 'ip dhcp pool MYPOOL',
-                'network 198.51.101.0 255.255.255.0'
+                'network 198.51.101.3 255.255.255.0'
             ]
 
             R5_DHCP_POOL = configure_device(ipv6, "atul", "atul", commands, config = True)
@@ -59,7 +59,7 @@ for line in fetch_ipv6_neighbour.splitlines()[1:]:
 
             fetch_dhcp_binding = configure_device(ipv6, "atul", "atul", commands)
 
-routers = ['198.51.102.1', '198.51.101.7', '198.51.101.1', '198.51.100.1', '198.51.101.5']
+routers = ['198.51.102.1', '198.51.101.1', '198.51.101.6', '198.51.100.1', '198.51.101.5']
 
 devices_info = collect_router_data("atul", routers)
 
@@ -68,3 +68,12 @@ formatted_info = "\n".join(f"{router}: {info}" for router, info in devices_info.
 
 # Log the information with each entry on a new line
 logger.success(f"Router Information:\n{formatted_info}")
+
+device_ip = '198.51.102.1'  # Replace with the device's IP address
+community = 'atul'  # Replace with the SNMP community string
+
+# Fetch CPU utilization data
+times, cpu_values = cpu_utilization(device_ip, community)
+
+# Plot and save the CPU utilization graph as a JPG file
+plot_and_save_cpu_utilization(times, cpu_values)
