@@ -1,0 +1,36 @@
+---
+- name: Configure iBGP using the bgp global module
+  connection: network_cli
+  hosts: routers
+  gather_facts: 'no'
+
+  tasks:
+    - name: Configure BGP on Router 1
+      cisco.ios.ios_bgp_global:
+        config:
+          as_number: 101
+          bgp:
+            log_neighbor_changes: true
+          networks:
+            - address: 10.0.0.0
+              netmask: 255.255.255.0
+          neighbor:
+            - neighbor_address: 198.51.100.3
+              remote_as: 101
+        state: merged
+      when: inventory_hostname == "198.51.100.1"
+
+    - name: Configure BGP on Router 2
+      cisco.ios.ios_bgp_global:
+        config:
+          as_number: 101
+          bgp:
+            log_neighbor_changes: true
+          networks:
+            - address: 20.0.0.0
+              netmask: 255.255.255.0
+          neighbor:
+            - neighbor_address: 198.51.100.1
+              remote_as: 101
+        state: merged
+      when: inventory_hostname == "198.51.100.3"

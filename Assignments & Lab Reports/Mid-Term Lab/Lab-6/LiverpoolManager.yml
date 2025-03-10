@@ -1,0 +1,22 @@
+---
+- name: LiverpoolManager Playbook for Linux
+  hosts: Liverpool
+  tasks:
+    - name: Group hosts based on system type (workstation or laptop)
+      group_by:
+        key: "system_{{ ansible_facts['os_family'] }}"
+
+    - name: Wait for SSH port to be open (port 22)
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 22
+        state: started
+        timeout: 20
+
+    - name: Set fact for environment type
+      set_fact:
+        environment: "Development"
+
+    - name: Display environment type
+      debug:
+        msg: "This is a {{ ansible_facts['os_family']  }} for {{ hostvars[inventory_hostname]['environment'] }} environment."

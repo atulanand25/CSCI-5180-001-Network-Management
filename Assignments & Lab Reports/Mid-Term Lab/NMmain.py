@@ -7,8 +7,17 @@ from loguru import logger
 ipv6_mac_pairs = extract_ipv6_and_mac_from_pcap("/home/netman/Downloads/lab5.pcapng", "2001:db8::1")
 
 logger.debug("IPv6 and Corresponding MAC Addresses (excluding link-local addresses):")
-
+R2_mac = ''
+R3_mac = ''
 for ipv6, mac in ipv6_mac_pairs:
+    if ipv6 == "2002:5678::c802:9dff:fe8a:0":
+        R2_mac = mac.replace(":", "")
+        mac = "01" + R2_mac
+        R2_mac = ".".join(mac[i:i+4] for i in range(0, len(mac), 4))
+    elif ipv6 == "2002:5678::c805:9fff:fed6:0":
+        R3_mac = mac.replace(":", "")
+        mac = "01" + R3_mac
+        R3_mac = ".".join(mac[i:i+4] for i in range(0, len(mac), 4))
     logger.success(f"IPv6: {ipv6} => MAC: {mac}")
 
 commands = "show ipv6 neighbors fastEthernet 0/0"
@@ -34,16 +43,16 @@ for line in fetch_ipv6_neighbour.splitlines()[1:]:
 
             commands = [
                 'ip dhcp pool R2',
-                'host 198.51.101.3 255.255.255.0',
-                f'client-identifier {ipv6_mac_pairs[0][1]}'
+                'host 198.51.101.2 255.255.255.0',
+                f'client-identifier {R2_mac}'
             ]
 
             R5_DHCP_STATIC_R2  = configure_device(ipv6, "atul", "atul", commands, config = True)
 
             commands = [
                 'ip dhcp pool R3',
-                'host 198.51.101.2 255.255.255.0',
-                f'client-identifier {ipv6_mac_pairs[1][1]}'
+                'host 198.51.101.3 255.255.255.0',
+                f'client-identifier {R3_mac}'
             ]
 
             R5_DHCP_STATIC_R3 = configure_device(ipv6, "atul", "atul", commands, config = True)
@@ -59,7 +68,7 @@ for line in fetch_ipv6_neighbour.splitlines()[1:]:
 
             fetch_dhcp_binding = configure_device(ipv6, "atul", "atul", commands)
 
-routers = ['198.51.102.1', '198.51.101.1', '198.51.101.6', '198.51.100.1', '198.51.101.5']
+routers = ['198.51.102.1', '198.51.101.3', '198.51.101.2', '198.51.100.1', '198.51.101.5']
 
 devices_info = collect_router_data("atul", routers)
 
@@ -77,3 +86,4 @@ times, cpu_values = cpu_utilization(device_ip, community)
 
 # Plot and save the CPU utilization graph as a JPG file
 plot_and_save_cpu_utilization(times, cpu_values)
+

@@ -3,7 +3,7 @@ from netmiko import ConnectHandler
 from loguru import logger
 
 
-def configure_device(ip, username, password, commands, config = False):
+def configure_device(ip, username, password, commands, config = False, commd = False):
     """
     Configures a Cisco router to obtain an IP address via DHCP on Interfaces.
 
@@ -31,8 +31,10 @@ def configure_device(ip, username, password, commands, config = False):
 
         if config:
             output = connection.send_config_set(commands)
+        elif commd:
+            output = connection.send_command_timing(commands, strip_prompt=False, strip_command=False)
         else:
-            output = connection.send_command(commands)
+            output = connection.send_command(commands, read_timeout=10)
 
         if "Invalid" in output or "Error" in output:
             logger.error(f"Configuration failed for {ip}: {output}")
